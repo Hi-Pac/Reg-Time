@@ -4,253 +4,160 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>نظام تسجيل الحضور والانصراف</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        primary: '#5D5CDE',
-                        secondary: '#4F46E5',
-                        success: '#10B981',
-                        danger: '#EF4444',
-                        dark: {
-                            bg: '#181818',
-                            card: '#262626',
-                            text: '#E5E7EB'
-                        },
-                        light: {
-                            bg: '#FFFFFF',
-                            card: '#F3F4F6',
-                            text: '#1F2937'
-                        }
-                    },
-                }
-            }
-        }
-    </script>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap');
         
-        * {
-            font-family: 'Tajawal', sans-serif;
+        :root {
+            --primary-color: #5D5CDE;
+            --success-color: #10B981;
+            --error-color: #EF4444;
+            --warning-color: #F59E0B;
+            --info-color: #3B82F6;
         }
-
-        .dark {
-            color-scheme: dark;
-        }
-
-        .dark body {
-            background-color: theme('colors.dark.bg');
-            color: theme('colors.dark.text');
-        }
-
+        
         body {
-            transition: background-color 0.3s ease;
+            font-family: 'Tajawal', sans-serif;
+            transition: background-color 0.3s ease, color 0.3s ease;
         }
-
-        .hidden {
-            display: none !important;
+        
+        .dark {
+            --bg-primary: #181818;
+            --text-primary: #ffffff;
+            --card-bg: #262626;
+            --border-color: #3f3f3f;
         }
-
+        
+        body.dark {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+        }
+        
+        .dark .card {
+            background-color: var(--card-bg);
+            border-color: var(--border-color);
+        }
+        
+        .btn-primary {
+            background-color: var(--primary-color);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover {
+            filter: brightness(1.1);
+            transform: translateY(-2px);
+        }
+        
+        .card {
+            transition: all 0.3s ease;
+            border-radius: 12px;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+        
         .loading-spinner {
             border: 4px solid rgba(0, 0, 0, 0.1);
-            border-left-color: #5D5CDE;
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
-            width: 30px;
-            height: 30px;
+            border-right-color: var(--primary-color);
             animation: spin 1s linear infinite;
         }
-
+        
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-
+        
         .dark .loading-spinner {
-            border-color: rgba(255, 255, 255, 0.1);
-            border-left-color: #5D5CDE;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-right-color: var(--primary-color);
         }
-
-        .success-checkmark {
-            width: 80px;
-            height: 80px;
-            margin: 0 auto;
+        
+        .pulse-animation {
+            animation: pulse 2s infinite;
         }
-
-        .check-icon {
-            width: 80px;
-            height: 80px;
-            position: relative;
-            border-radius: 50%;
-            box-sizing: content-box;
-            border: 4px solid #10B981;
+        
+        @keyframes pulse {
+            0% { transform: scale(0.95); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(0.95); }
         }
-
-        .check-icon::before {
-            top: 3px;
-            left: -2px;
-            width: 30px;
-            transform-origin: 100% 50%;
-            border-radius: 100px 0 0 100px;
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
         }
-
-        .check-icon::after {
-            top: 0;
-            left: 30px;
-            width: 60px;
-            transform-origin: 0 50%;
-            border-radius: 0 100px 100px 0;
-            animation: rotate-circle 4.25s ease-in;
-        }
-
-        .check-icon::before, .check-icon::after {
-            content: '';
-            height: 100px;
-            position: absolute;
-            background: transparent;
-            transform: rotate(-45deg);
-        }
-
-        .check-icon .icon-line {
-            height: 5px;
-            background-color: #10B981;
-            display: block;
-            border-radius: 2px;
-            position: absolute;
-            z-index: 10;
-        }
-
-        .check-icon .icon-line.line-tip {
-            top: 46px;
-            left: 14px;
-            width: 25px;
-            transform: rotate(45deg);
-            animation: icon-line-tip 0.75s;
-        }
-
-        .check-icon .icon-line.line-long {
-            top: 38px;
-            right: 8px;
-            width: 47px;
-            transform: rotate(-45deg);
-            animation: icon-line-long 0.75s;
-        }
-
-        @keyframes icon-line-tip {
-            0% { width: 0; left: 1px; top: 19px; }
-            54% { width: 0; left: 1px; top: 19px; }
-            70% { width: 50px; left: -8px; top: 37px; }
-            84% { width: 17px; left: 21px; top: 48px; }
-            100% { width: 25px; left: 14px; top: 46px; }
-        }
-
-        @keyframes icon-line-long {
-            0% { width: 0; right: 46px; top: 54px; }
-            65% { width: 0; right: 46px; top: 54px; }
-            84% { width: 55px; right: 0px; top: 35px; }
-            100% { width: 47px; right: 8px; top: 38px; }
+        
+        @keyframes fadeIn {
+            0% { opacity: 0; }
+            100% { opacity: 1; }
         }
     </style>
 </head>
-<body class="bg-white dark:bg-dark-bg text-gray-800 dark:text-gray-200 min-h-screen">
-    <div class="container mx-auto max-w-md p-4">
-        <!-- صفحة البداية -->
-        <div id="main-screen" class="flex flex-col items-center justify-center min-h-screen -mt-16">
-            <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 24 24' fill='none' stroke='%235D5CDE' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'%3E%3C/circle%3E%3Cpolyline points='12 6 12 12 16 14'%3E%3C/polyline%3E%3C/svg%3E" 
-                 alt="شعار تسجيل الحضور" class="mb-6">
-            <h1 class="text-3xl font-bold mb-8 text-center text-primary">نظام تسجيل الحضور والانصراف</h1>
-            <button id="start-btn" class="bg-primary hover:bg-secondary text-white text-xl font-bold py-4 px-8 rounded-lg w-full mb-4 transition duration-300 shadow-lg">
-                تسجيل الحضور/الانصراف
+<body class="min-h-screen bg-gray-100 py-6 px-4">
+    <div class="max-w-md mx-auto">
+        <div class="card bg-white p-8 rounded-xl shadow-lg mb-6 text-center fade-in">
+            <div class="flex justify-center mb-4">
+                <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='64' height='64'%3E%3Cpath fill='%235D5CDE' d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z'/%3E%3C/svg%3E" 
+                    alt="شعار الحضور" class="w-16 h-16">
+            </div>
+            <h1 class="text-2xl font-bold text-gray-800 mb-2">نظام تسجيل الحضور والانصراف</h1>
+            <p class="text-gray-600 mb-6">سجل حضورك وانصرافك بسهولة وأمان</p>
+            
+            <div id="locationStatus" class="hidden mb-4 p-3 rounded-md bg-yellow-100 text-yellow-800">
+                <div class="flex items-center">
+                    <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"></path>
+                    </svg>
+                    <span id="locationStatusText">جاري التحقق من موقعك...</span>
+                </div>
+            </div>
+            
+            <div id="nameForm" class="hidden mb-4">
+                <div class="mb-3">
+                    <label for="employeeName" class="block text-gray-700 text-sm font-medium mb-2">اسمك الثنائي</label>
+                    <input type="text" id="employeeName" class="w-full px-4 py-2 text-base border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent" placeholder="أدخل اسمك الثنائي" dir="rtl">
+                </div>
+                <button id="submitName" class="w-full btn-primary text-white py-2 px-4 rounded-md font-medium">
+                    تسجيل البيانات
+                </button>
+            </div>
+            
+            <button id="checkButton" class="w-full btn-primary text-white py-3 px-6 rounded-md font-medium text-lg pulse-animation">
+                تسجيل الحضور / الانصراف
             </button>
-            <p class="text-sm text-gray-500 dark:text-gray-400 text-center mt-4">
-                يرجى التأكد من تواجدك في مقر العمل وتفعيل خدمة تحديد الموقع
-            </p>
-        </div>
-
-        <!-- صفحة تحديد الموقع -->
-        <div id="location-screen" class="hidden flex flex-col items-center justify-center min-h-screen -mt-16">
-            <div class="w-full max-w-md bg-light-card dark:bg-dark-card p-6 rounded-xl shadow-lg">
-                <h2 class="text-2xl font-bold mb-4 text-center text-primary">التحقق من الموقع</h2>
-                <p class="text-center mb-6">جاري التحقق من موقعك...</p>
-                <div class="flex justify-center my-8">
-                    <div class="loading-spinner"></div>
-                </div>
-                <p id="location-status" class="text-center text-sm text-gray-500 dark:text-gray-400"></p>
+            
+            <div id="loadingIndicator" class="hidden mt-4 flex justify-center">
+                <div class="loading-spinner"></div>
             </div>
         </div>
-
-        <!-- صفحة التسجيل الأولى -->
-        <div id="registration-screen" class="hidden flex flex-col items-center justify-center min-h-screen -mt-16">
-            <div class="w-full max-w-md bg-light-card dark:bg-dark-card p-6 rounded-xl shadow-lg">
-                <h2 class="text-2xl font-bold mb-4 text-center text-primary">تسجيل بيانات جديدة</h2>
-                <p class="text-center mb-6">يبدو أنها المرة الأولى لاستخدام النظام على هذا الجهاز</p>
-                <form id="registration-form" class="space-y-4">
-                    <div>
-                        <label for="employee-name" class="block text-sm font-medium mb-1">الاسم الثنائي</label>
-                        <input type="text" id="employee-name" required 
-                               class="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-base" 
-                               placeholder="أدخل اسمك الثنائي">
-                    </div>
-                    <button type="submit" class="w-full bg-primary hover:bg-secondary text-white font-bold py-3 px-4 rounded-lg transition duration-300 shadow-md">
-                        تسجيل البيانات
-                    </button>
-                </form>
+        
+        <div id="successCard" class="hidden card bg-white p-6 rounded-xl shadow-lg text-center mb-6 fade-in">
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 mx-auto mb-4">
+                <svg class="w-8 h-8 text-green-500" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                </svg>
             </div>
+            <h2 id="successTitle" class="text-2xl font-bold text-gray-800 mb-2"></h2>
+            <p id="successTime" class="text-gray-600 mb-2"></p>
+            <p id="successDate" class="text-gray-600 mb-4"></p>
+            <p id="successName" class="text-lg font-medium text-gray-800"></p>
         </div>
-
-        <!-- صفحة النجاح -->
-        <div id="success-screen" class="hidden flex flex-col items-center justify-center min-h-screen -mt-16">
-            <div class="w-full max-w-md bg-light-card dark:bg-dark-card p-6 rounded-xl shadow-lg">
-                <div class="success-checkmark">
-                    <div class="check-icon">
-                        <span class="icon-line line-tip"></span>
-                        <span class="icon-line line-long"></span>
-                    </div>
-                </div>
-                <h2 id="success-title" class="text-2xl font-bold mt-6 mb-2 text-center text-success">تم تسجيل الدخول بنجاح!</h2>
-                <p id="success-message" class="text-center mb-6">تم تسجيل دخولك بنجاح في قاعدة البيانات</p>
-                <p id="success-time" class="text-center font-bold text-xl mb-4"></p>
-                <p id="success-date" class="text-center text-gray-500 dark:text-gray-400 mb-8"></p>
-                <button id="done-btn" class="w-full bg-primary hover:bg-secondary text-white font-bold py-3 px-4 rounded-lg transition duration-300 shadow-md">
-                    تم
-                </button>
-            </div>
-        </div>
-
-        <!-- صفحة الخطأ -->
-        <div id="error-screen" class="hidden flex flex-col items-center justify-center min-h-screen -mt-16">
-            <div class="w-full max-w-md bg-light-card dark:bg-dark-card p-6 rounded-xl shadow-lg">
-                <div class="flex justify-center mb-6">
-                    <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 24 24' fill='none' stroke='%23EF4444' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'%3E%3C/circle%3E%3Cline x1='15' y1='9' x2='9' y2='15'%3E%3C/line%3E%3Cline x1='9' y1='9' x2='15' y2='15'%3E%3C/line%3E%3C/svg%3E" 
-                         alt="خطأ">
-                </div>
-                <h2 class="text-2xl font-bold mb-4 text-center text-danger">خطأ!</h2>
-                <p id="error-message" class="text-center mb-6">حدث خطأ أثناء تسجيل البيانات</p>
-                <button id="retry-btn" class="w-full bg-primary hover:bg-secondary text-white font-bold py-3 px-4 rounded-lg transition duration-300 shadow-md">
-                    المحاولة مرة أخرى
-                </button>
-            </div>
-        </div>
+        
+        <p class="text-center text-gray-500 text-sm">
+            &copy; <span id="currentYear"></span> نظام تسجيل الحضور والانصراف
+        </p>
     </div>
 
     <script>
-        // التحقق من وضع الألوان
-        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-            document.documentElement.classList.add('dark');
-        }
-        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
-            if (event.matches) {
-                document.documentElement.classList.add('dark');
-            } else {
-                document.documentElement.classList.remove('dark');
-            }
-        });
-
-        // تهيئة Firebase
+        // تكوين Firebase
         const firebaseConfig = {
             apiKey: "AIzaSyBGmPBvFrap25W2d-BueVCjHmWJh5vAaiU",
             authDomain: "reg-time.firebaseapp.com",
@@ -260,283 +167,317 @@
             appId: "1:388216258796:web:61ebca12e7c6c9e05765c9",
             measurementId: "G-4Q8T869WC1"
         };
-
+        
         // تهيئة Firebase
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
-
-        // إحداثيات الشركة (مثال - يمكن تغييرها حسب الموقع الفعلي)
-       const companyLocation = {
-            latitude: 30.8088129, // مثال: القاهرة
+        
+        // موقع الشركة
+        const companyLocation = {
+            latitude: 30.8088129, 
             longitude: 31.0031028,
             radius: 200 // نصف قطر دائرة الشركة بالمتر
         };
-
-        // التعريفات الأساسية
-        const screens = {
-            main: document.getElementById('main-screen'),
-            location: document.getElementById('location-screen'),
-            registration: document.getElementById('registration-screen'),
-            success: document.getElementById('success-screen'),
-            error: document.getElementById('error-screen')
-        };
-
+        
+        // العناصر في الصفحة
         const elements = {
-            startBtn: document.getElementById('start-btn'),
-            locationStatus: document.getElementById('location-status'),
-            registrationForm: document.getElementById('registration-form'),
-            employeeName: document.getElementById('employee-name'),
-            successTitle: document.getElementById('success-title'),
-            successMessage: document.getElementById('success-message'),
-            successTime: document.getElementById('success-time'),
-            successDate: document.getElementById('success-date'),
-            doneBtn: document.getElementById('done-btn'),
-            errorMessage: document.getElementById('error-message'),
-            retryBtn: document.getElementById('retry-btn')
+            checkButton: document.getElementById('checkButton'),
+            loadingIndicator: document.getElementById('loadingIndicator'),
+            locationStatus: document.getElementById('locationStatus'),
+            locationStatusText: document.getElementById('locationStatusText'),
+            nameForm: document.getElementById('nameForm'),
+            employeeName: document.getElementById('employeeName'),
+            submitName: document.getElementById('submitName'),
+            successCard: document.getElementById('successCard'),
+            successTitle: document.getElementById('successTitle'),
+            successTime: document.getElementById('successTime'),
+            successDate: document.getElementById('successDate'),
+            successName: document.getElementById('successName'),
+            currentYear: document.getElementById('currentYear')
         };
-
-        // دالة لحساب المسافة بين نقطتين باستخدام معادلة هافرساين
+        
+        // ضبط السنة الحالية
+        elements.currentYear.textContent = new Date().getFullYear();
+        
+        // وضع الثيم الداكن
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.classList.add('dark');
+            document.body.classList.add('dark');
+        }
+        
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+            if (event.matches) {
+                document.documentElement.classList.add('dark');
+                document.body.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+                document.body.classList.remove('dark');
+            }
+        });
+        
+        // توليد معرف الجهاز
+        function generateDeviceId() {
+            let deviceId = localStorage.getItem('device_id');
+            if (!deviceId) {
+                // إنشاء هوية جديدة إذا لم تكن موجودة
+                deviceId = 'device_' + Date.now() + '_' + Math.random().toString(36).substring(2, 15);
+                localStorage.setItem('device_id', deviceId);
+            }
+            return deviceId;
+        }
+        
+        // التحقق من المسافة بين نقطتين جغرافيتين
         function calculateDistance(lat1, lon1, lat2, lon2) {
-            const R = 6371e3; // نصف قطر الأرض بالمتر
+            const R = 6371e3; // نصف قطر الأرض بالأمتار
             const φ1 = lat1 * Math.PI / 180;
             const φ2 = lat2 * Math.PI / 180;
             const Δφ = (lat2 - lat1) * Math.PI / 180;
             const Δλ = (lon2 - lon1) * Math.PI / 180;
-
-            const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-                      Math.cos(φ1) * Math.cos(φ2) *
-                      Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-            const d = R * c;
-
-            return d; // المسافة بالمتر
+            
+            const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                    Math.cos(φ1) * Math.cos(φ2) *
+                    Math.sin(Δλ/2) * Math.sin(Δλ/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            
+            return R * c; // المسافة بالأمتار
         }
-
-        // دالة للحصول على معرّف فريد للجهاز
-        async function getDeviceId() {
-            // نستخدم مزيج من معلومات الجهاز لإنشاء معرف "شبه فريد"
-            const userAgent = navigator.userAgent;
-            const screenData = `${window.screen.width}x${window.screen.height}x${window.screen.colorDepth}`;
-            const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-            const language = navigator.language;
+        
+        // التحقق من الموقع
+        function checkLocation(position) {
+            const { latitude, longitude } = position.coords;
+            const distance = calculateDistance(
+                latitude, longitude,
+                companyLocation.latitude, companyLocation.longitude
+            );
             
-            // دمج المعلومات وإنشاء هاش بسيط
-            const deviceInfo = `${userAgent}|${screenData}|${timeZone}|${language}`;
+            elements.locationStatus.classList.remove('hidden');
             
-            // استخدام خوارزمية SHA-256 لإنشاء بصمة فريدة
-            const msgBuffer = new TextEncoder().encode(deviceInfo);
-            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-            const hashArray = Array.from(new Uint8Array(hashBuffer));
-            const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-            
-            return hashHex;
+            if (distance <= companyLocation.radius) {
+                elements.locationStatus.classList.remove('bg-yellow-100', 'text-yellow-800');
+                elements.locationStatus.classList.add('bg-green-100', 'text-green-800');
+                elements.locationStatusText.textContent = 'تم التحقق من موقعك بنجاح!';
+                
+                setTimeout(() => {
+                    elements.locationStatus.classList.add('hidden');
+                    checkDeviceRegistration();
+                }, 1500);
+                
+                return true;
+            } else {
+                elements.locationStatus.classList.remove('bg-yellow-100', 'text-yellow-800');
+                elements.locationStatus.classList.add('bg-red-100', 'text-red-800');
+                elements.locationStatusText.textContent = 'أنت لست في الموقع المحدد للشركة الآن. يرجى إعادة المحاولة مرة أخرى عند الوصول للشركة.';
+                
+                elements.loadingIndicator.classList.add('hidden');
+                elements.checkButton.classList.remove('hidden');
+                
+                return false;
+            }
         }
-
-        // دالة لتحديد نوع التسجيل (حضور/انصراف) بناءً على الوقت
+        
+        // التحقق من تسجيل الجهاز
+        async function checkDeviceRegistration() {
+            const deviceId = generateDeviceId();
+            
+            try {
+                const docRef = db.collection('employees').doc(deviceId);
+                const doc = await docRef.get();
+                
+                if (doc.exists) {
+                    // الموظف مسجل بالفعل
+                    processAttendance(deviceId, doc.data().name);
+                } else {
+                    // موظف جديد، عرض نموذج الاسم
+                    elements.nameForm.classList.remove('hidden');
+                    elements.checkButton.classList.add('hidden');
+                }
+            } catch (error) {
+                console.error("خطأ في التحقق من تسجيل الجهاز:", error);
+                showError("حدث خطأ أثناء التحقق من بيانات الجهاز. يرجى المحاولة مرة أخرى.");
+            }
+        }
+        
+        // تسجيل موظف جديد
+        async function registerNewEmployee(name) {
+            const deviceId = generateDeviceId();
+            
+            try {
+                await db.collection('employees').doc(deviceId).set({
+                    name: name,
+                    registrationDate: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                elements.nameForm.classList.add('hidden');
+                processAttendance(deviceId, name);
+            } catch (error) {
+                console.error("خطأ في تسجيل موظف جديد:", error);
+                showError("حدث خطأ أثناء تسجيل بياناتك. يرجى المحاولة مرة أخرى.");
+                
+                elements.nameForm.classList.add('hidden');
+                elements.checkButton.classList.remove('hidden');
+            }
+        }
+        
+        // تحديد نوع التسجيل (حضور/انصراف) بناءً على الوقت
         function determineAttendanceType() {
             const now = new Date();
             const hours = now.getHours();
             
-            // من 7 صباحاً حتى 11 صباحاً = حضور
             if (hours >= 7 && hours < 11) {
                 return "حضور";
-            } 
-            // من 2 مساءً حتى 6 مساءً = انصراف
-            else if (hours >= 14 && hours < 18) {
+            } else if (hours >= 14 && hours < 18) {
                 return "انصراف";
-            } 
-            // خارج أوقات الدوام
-            else {
-                return "خارج أوقات الدوام";
+            } else {
+                return null; // خارج أوقات التسجيل
             }
         }
-
-        // دالة لإظهار شاشة محددة وإخفاء باقي الشاشات
-        function showScreen(screenId) {
-            Object.keys(screens).forEach(key => {
-                screens[key].classList.add('hidden');
-            });
-            screens[screenId].classList.remove('hidden');
+        
+        // تنسيق التاريخ والوقت
+        function formatDateTime() {
+            const now = new Date();
+            
+            // تنسيق الوقت: الساعة:الدقيقة
+            const timeOptions = { hour: '2-digit', minute: '2-digit', hour12: true };
+            const formattedTime = now.toLocaleTimeString('ar-EG', timeOptions);
+            
+            // تنسيق التاريخ: اليوم الشهر السنة
+            const dateOptions = { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' };
+            const formattedDate = now.toLocaleDateString('ar-EG', dateOptions);
+            
+            return {
+                time: formattedTime,
+                date: formattedDate,
+                timestamp: now
+            };
         }
-
-        // دالة للتحقق من الموقع
-        function checkLocation() {
-            return new Promise((resolve, reject) => {
-                showScreen('location');
-                elements.locationStatus.textContent = 'جاري الحصول على موقعك...';
-
-                if (!navigator.geolocation) {
-                    elements.locationStatus.textContent = 'تحديد الموقع غير مدعوم في متصفحك.';
-                    reject(new Error('Geolocation not supported'));
-                    return;
-                }
-
-                navigator.geolocation.getCurrentPosition(
-                    async (position) => {
-                        const userLat = position.coords.latitude;
-                        const userLong = position.coords.longitude;
-                        const distance = calculateDistance(
-                            userLat, userLong,
-                            companyLocation.latitude, companyLocation.longitude
-                        );
-
-                        elements.locationStatus.textContent = `تم تحديد موقعك. المسافة: ${Math.round(distance)} متر.`;
-
-                        if (distance <= companyLocation.radius) {
-                            // الموظف داخل نطاق الشركة
-                            resolve(true);
-                        } else {
-                            // الموظف خارج نطاق الشركة
-                            elements.errorMessage.textContent = 'أنت لست في الموقع المحدد للشركة الآن. يرجى إعادة المحاولة مرة أخرى عند الوصول للشركة.';
-                            showScreen('error');
-                            reject(new Error('User not in company location'));
-                        }
-                    },
-                    (error) => {
-                        let errorMsg = 'حدث خطأ أثناء تحديد الموقع.';
-                        switch (error.code) {
-                            case error.PERMISSION_DENIED:
-                                errorMsg = 'تم رفض طلب الوصول إلى الموقع. يرجى السماح بالوصول إلى خدمة تحديد الموقع.';
-                                break;
-                            case error.POSITION_UNAVAILABLE:
-                                errorMsg = 'معلومات الموقع غير متاحة.';
-                                break;
-                            case error.TIMEOUT:
-                                errorMsg = 'انتهت مهلة طلب تحديد الموقع.';
-                                break;
-                        }
-                        elements.errorMessage.textContent = errorMsg;
-                        showScreen('error');
-                        reject(new Error(errorMsg));
-                    },
-                    { 
-                        enableHighAccuracy: true, 
-                        timeout: 10000, 
-                        maximumAge: 0 
-                    }
-                );
-            });
-        }
-
-        // دالة لتسجيل البيانات في Firebase
-        async function recordAttendance(name, deviceId) {
+        
+        // معالجة تسجيل الحضور أو الانصراف
+        async function processAttendance(deviceId, name) {
+            const attendanceType = determineAttendanceType();
+            
+            if (!attendanceType) {
+                showError("لا يمكن تسجيل الدخول أو الخروج خارج المواعيد المحددة.");
+                elements.checkButton.classList.remove('hidden');
+                elements.loadingIndicator.classList.add('hidden');
+                return;
+            }
+            
+            const { time, date, timestamp } = formatDateTime();
+            
             try {
-                const now = new Date();
-                const attendanceType = determineAttendanceType();
-                
-                if (attendanceType === "خارج أوقات الدوام") {
-                    elements.errorMessage.textContent = 'أنت خارج أوقات تسجيل الحضور/الانصراف. أوقات الحضور: من 7 صباحاً حتى 11 صباحاً. أوقات الانصراف: من 2 مساءً حتى 6 مساءً.';
-                    showScreen('error');
-                    return false;
-                }
-                
-                // تنسيق الوقت والتاريخ
-                const time = now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
-                const date = now.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
-
-                // إضافة البيانات إلى Firestore
+                // تخزين بيانات الحضور/الانصراف
                 await db.collection('attendance').add({
-                    name: name,
                     deviceId: deviceId,
+                    name: name,
                     time: time,
                     date: date,
-                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                    timestamp: firebase.firestore.Timestamp.fromDate(timestamp),
                     type: attendanceType
                 });
-
-                // تحديث بيانات العرض
-                elements.successTitle.textContent = `تم تسجيل ${attendanceType === "حضور" ? "الدخول" : "الانصراف"} بنجاح!`;
-                elements.successMessage.textContent = `تم تسجيل ${attendanceType === "حضور" ? "دخولك" : "انصرافك"} بنجاح في قاعدة البيانات`;
-                elements.successTime.textContent = time;
-                elements.successDate.textContent = date;
-                showScreen('success');
-                return true;
-            } catch (error) {
-                console.error("Error adding document: ", error);
-                elements.errorMessage.textContent = 'حدث خطأ أثناء تسجيل البيانات. يرجى المحاولة مرة أخرى.';
-                showScreen('error');
-                return false;
-            }
-        }
-
-        // دالة للتحقق من وجود الموظف وتسجيل بياناته
-        async function checkAndRecordAttendance() {
-            try {
-                // الحصول على معرف الجهاز
-                const deviceId = await getDeviceId();
                 
-                // البحث في قاعدة البيانات عن معرف الجهاز
-                const snapshot = await db.collection('employees').where('deviceId', '==', deviceId).get();
+                // عرض رسالة النجاح
+                elements.successTitle.textContent = `تم تسجيل ${attendanceType} بنجاح!`;
+                elements.successTime.textContent = `الوقت: ${time}`;
+                elements.successDate.textContent = `التاريخ: ${date}`;
+                elements.successName.textContent = `الاسم: ${name}`;
                 
-                if (snapshot.empty) {
-                    // الموظف غير مسجل من قبل
-                    showScreen('registration');
-                    
-                } else {
-                    // الموظف مسجل من قبل
-                    const employeeData = snapshot.docs[0].data();
-                    // تسجيل الحضور/الانصراف
-                    await recordAttendance(employeeData.name, deviceId);
-                }
+                elements.successCard.classList.remove('hidden');
+                elements.checkButton.classList.add('hidden');
+                elements.loadingIndicator.classList.add('hidden');
+                
+                // تشغيل الكونفيتي عند النجاح
+                confetti({
+                    particleCount: 100,
+                    spread: 70,
+                    origin: { y: 0.6 }
+                });
+                
+                // إغلاق النافذة تلقائيًا بعد 5 ثوان
+                setTimeout(() => {
+                    window.close();
+                }, 5000);
                 
             } catch (error) {
-                console.error("Error checking employee: ", error);
-                elements.errorMessage.textContent = 'حدث خطأ أثناء التحقق من بياناتك. يرجى المحاولة مرة أخرى.';
-                showScreen('error');
+                console.error("خطأ في تسجيل الحضور/الانصراف:", error);
+                showError("حدث خطأ أثناء تسجيل البيانات. يرجى المحاولة مرة أخرى.");
+                
+                elements.checkButton.classList.remove('hidden');
+                elements.loadingIndicator.classList.add('hidden');
             }
         }
-                            // معالجة نموذج التسجيل
-                    elements.registrationForm.onsubmit = async (e) => {
-                        e.preventDefault();
-                        const name = elements.employeeName.value.trim();
-                        
-                        if (!name) {
-                            alert('يرجى إدخال الاسم الثنائي');
-                            return;
-                        }
-                        
-                        // إضافة بيانات الموظف الجديد
-                        try {
-                            await db.collection('employees').add({
-                                name: name,
-                                deviceId: deviceId,
-                                registeredAt: firebase.firestore.FieldValue.serverTimestamp()
-                            });
-                            
-                            // تسجيل الحضور/الانصراف
-                            await recordAttendance(name, deviceId);
-                            
-                        } catch (error) {
-                            console.error("Error registering employee: ", error);
-                            elements.errorMessage.textContent = 'حدث خطأ أثناء تسجيل بياناتك. يرجى المحاولة مرة أخرى.';
-                            showScreen('error');
-                        }
-                    };
         
-        // أحداث الأزرار
-        elements.startBtn.addEventListener('click', async () => {
-            try {
-                const locationValid = await checkLocation();
-                if (locationValid) {
-                    await checkAndRecordAttendance();
-                }
-            } catch (error) {
-                console.error("Process error: ", error);
-                // تم معالجة الخطأ بالفعل في الدوال الداخلية
+        // عرض رسالة خطأ
+        function showError(message) {
+            Swal.fire({
+                title: 'خطأ',
+                text: message,
+                icon: 'error',
+                confirmButtonText: 'موافق',
+                confirmButtonColor: '#5D5CDE'
+            });
+        }
+        
+        // تعامل مع النقر على زر التسجيل
+        elements.checkButton.addEventListener('click', () => {
+            elements.checkButton.classList.add('hidden');
+            elements.loadingIndicator.classList.remove('hidden');
+            
+            if (navigator.geolocation) {
+                elements.locationStatus.classList.remove('hidden');
+                elements.locationStatusText.textContent = 'جاري التحقق من موقعك...';
+                
+                navigator.geolocation.getCurrentPosition(
+                    checkLocation,
+                    (error) => {
+                        console.error("خطأ في تحديد الموقع:", error);
+                        
+                        elements.locationStatus.classList.remove('bg-yellow-100', 'text-yellow-800');
+                        elements.locationStatus.classList.add('bg-red-100', 'text-red-800');
+                        
+                        switch(error.code) {
+                            case error.PERMISSION_DENIED:
+                                elements.locationStatusText.textContent = 'تم رفض الوصول إلى خدمة تحديد الموقع.';
+                                break;
+                            case error.POSITION_UNAVAILABLE:
+                                elements.locationStatusText.textContent = 'معلومات الموقع غير متاحة.';
+                                break;
+                            case error.TIMEOUT:
+                                elements.locationStatusText.textContent = 'انتهت مهلة طلب تحديد الموقع.';
+                                break;
+                            default:
+                                elements.locationStatusText.textContent = 'حدث خطأ غير معروف في تحديد الموقع.';
+                                break;
+                        }
+                        
+                        elements.loadingIndicator.classList.add('hidden');
+                        elements.checkButton.classList.remove('hidden');
+                    },
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                );
+            } else {
+                showError("متصفحك لا يدعم خدمة تحديد الموقع.");
+                elements.loadingIndicator.classList.add('hidden');
+                elements.checkButton.classList.remove('hidden');
             }
         });
-
-        elements.doneBtn.addEventListener('click', () => {
-            showScreen('main');
+        
+        // تعامل مع النقر على زر تسجيل الاسم
+        elements.submitName.addEventListener('click', () => {
+            const name = elements.employeeName.value.trim();
+            
+            if (name.length < 3) {
+                showError("يرجى إدخال اسمك الثنائي بشكل صحيح.");
+                return;
+            }
+            
+            registerNewEmployee(name);
         });
-
-        elements.retryBtn.addEventListener('click', () => {
-            showScreen('main');
-        });
-
-        // عرض الشاشة الرئيسية عند تحميل الصفحة
-        document.addEventListener('DOMContentLoaded', () => {
-            showScreen('main');
+        
+        // التعامل مع ضغط Enter في حقل الاسم
+        elements.employeeName.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                elements.submitName.click();
+            }
         });
     </script>
 </body>
