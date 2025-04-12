@@ -472,7 +472,20 @@
                     // الموظف غير مسجل من قبل
                     showScreen('registration');
                     
-                    // معالجة نموذج التسجيل
+                } else {
+                    // الموظف مسجل من قبل
+                    const employeeData = snapshot.docs[0].data();
+                    // تسجيل الحضور/الانصراف
+                    await recordAttendance(employeeData.name, deviceId);
+                }
+                
+            } catch (error) {
+                console.error("Error checking employee: ", error);
+                elements.errorMessage.textContent = 'حدث خطأ أثناء التحقق من بياناتك. يرجى المحاولة مرة أخرى.';
+                showScreen('error');
+            }
+        }
+                            // معالجة نموذج التسجيل
                     elements.registrationForm.onsubmit = async (e) => {
                         e.preventDefault();
                         const name = elements.employeeName.value.trim();
@@ -499,21 +512,7 @@
                             showScreen('error');
                         }
                     };
-                    
-                } else {
-                    // الموظف مسجل من قبل
-                    const employeeData = snapshot.docs[0].data();
-                    // تسجيل الحضور/الانصراف
-                    await recordAttendance(employeeData.name, deviceId);
-                }
-                
-            } catch (error) {
-                console.error("Error checking employee: ", error);
-                elements.errorMessage.textContent = 'حدث خطأ أثناء التحقق من بياناتك. يرجى المحاولة مرة أخرى.';
-                showScreen('error');
-            }
-        }
-
+        
         // أحداث الأزرار
         elements.startBtn.addEventListener('click', async () => {
             try {
