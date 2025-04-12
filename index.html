@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام تسجيل الحضور والانصراف</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/firebase@9.22.0/firebase-app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/firebase@9.22.0/firebase-firestore.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/firebase@9.22.0/firebase-auth.js"></script>
+    <style>
+        :root {
+            --primary-color: #5D5CDE;
+            --secondary-color: #4644B5;
+            --light-bg: #FFFFFF;
+            --dark-bg: #181818;
+            --light-text: #333333;
+            --dark-text: #E5E5E5;
+        }
+        
+        body {
+            font-family: 'Cairo', 'Tajawal', sans-serif;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        
+        .dark {
+            background-color: var(--dark-bg);
+            color: var(--dark-text);
+        }
+        
+        .light {
+            background-color: var(--light-bg);
+            color: var(--light-text);
+        }
+        
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: white;
+            transition: background-color 0.3s;
+        }
+        
+        .btn-primary:hover {
+            background-color: var(--secondary-color);
+        }
+        
+        .dark .card {
+            background-color: #2D2D2D;
+            color: var(--dark-text);
+        }
+        
+        .light .card {
+            background-color: white;
+            color: var(--light-text);
+        }
+        
+        .dark input,
+        .dark select {
+            background-color: #3D3D3D;
+            color: var(--dark-text);
+            border-color: #4D4D4D;
+        }
+        
+        .light input,
+        .light select {
+            background-color: #F5F5F5;
+            color: var(--light-text);
+            border-color: #E0E0E0;
+        }
+        
+        .loader {
+            border-top-color: var(--primary-color);
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        #qr-reader {
+            width: 100%;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        
+        #qr-reader img {
+            width: 100%;
+        }
+        
+        #qr-reader__scan_region {
+            position: relative;
+        }
+        
+        #qr-reader__dashboard {
+            padding: 10px;
+        }
+        
+        #qr-reader__dashboard button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 16px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+            transform: translateX(120%);
+            transition: transform 0.3s ease-in-out;
+        }
+        
+        .toast.show {
+            transform: translateX(0);
+        }
+        
+        .toast-success {
+            background-color: #10B981;
+            color: white;
+        }
+        
+        .toast-error {
+            background-color: #EF4444;
+            color: white;
+        }
+    </style>
+</head>
+<body class="light min-h-screen flex flex-col">
+    <div class="toast" id="toast">
+        <span id="toast-message"></span>
+    </div>
+    
+    <!-- قسم تسجيل الدخول -->
+    <div id="login-section" class="flex flex-col items-center justify-center min-h-screen p-6">
+        <div class="card p-6 rounded-lg shadow-lg w-full max-w-md">
+            <h2 class="text-2xl font-bold mb-6 text-center">تسجيل الدخول</h2>
+            <form id="login-form" class="space-y-4">
+                <div>
+                    <label for="employee-id" class="block text-sm font-medium mb-1">رقم الموظف</label>
+                    <input type="text" id="employee-id" class="w-full px-4 py-2 rounded-lg border text-base" required>
+                </div>
+                <div>
+                    <label for="employee-name" class="block text-sm font-medium mb-1">اسم الموظف</label>
+                    <input type="text" id="employee-name" class="w-full px-4 py-2 rounded-lg border text-base" required>
+                </div>
+                <div>
+                    <label for="password" class="block text-sm font-medium mb-1">كلمة المرور</label>
+                    <input type="password" id="password" class="w-full px-4 py-2 rounded-lg border text-base" required>
+                </div>
+                <button type="submit" class="w-full btn-primary py-2 rounded-lg font-medium">تسجيل الدخول</button>
+            </form>
+        </div>
+    </div>
+    
+    <!-- قسم الرئيسي للتطبيق -->
+    <div id="app-section" class="hidden flex-grow">
+        <header class="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-4 shadow-md">
+            <div class="container mx-auto flex justify-between items-center">
+                <h1 class="text-xl font-bold">نظام تسجيل الحضور والانصراف</h1>
+                <div class="flex items-center space-x-4 space-x-reverse">
+                    <span id="user-name" class="font-medium"></span>
+                    <button id="logout-btn" class="bg-white text-blue-600 px-3 py-1 rounded-lg text-sm font-medium hover:bg-blue-50 transition">خروج</button>
+                </div>
+            </div>
+        </header>
+        
+        <main class="container mx-auto p-4 flex-grow">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="card p-6 rounded-lg shadow-md">
+                    <div class="mb-4 text-center">
+                        <h2 class="text-xl font-bold mb-2">تسجيل الحضور / الانصراف</h2>
+                        <p class="text-sm opacity-75">قم بمسح رمز QR لتسجيل حضورك أو انصرافك</p>
+                    </div>
+                    
+                    <div id="location-status" class="mb-4 p-3 bg-yellow-100 text-yellow-800 rounded-lg text-sm hidden">
+                        جاري تحديد موقعك...
+                    </div>
+                    
+                    <div id="qr-section" class="mb-4 text-center">
+                        <button id="start-scan-btn" class="btn-primary px-4 py-2 rounded-lg mb-4">بدء المسح</button>
+                        <div id="qr-reader" class="hidden"></div>
+                    </div>
+                    
+                    <div id="last-record" class="p-4 bg-gray-100 dark:bg-gray-700 rounded-lg mt-4 hidden">
+                        <h3 class="font-bold mb-2">آخر تسجيل:</h3>
+                        <p id="last-record-time"></p>
+                        <p id="last-record-type"></p>
+                    </div>
+                </div>
+                
+                <div class="card p-6 rounded-lg shadow-md">
+                    <h2 class="text-xl font-bold mb-4">سجل الحضور والانصراف</h2>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead>
+                                <tr>
+                                    <th class="px-4 py-2 text-right">التاريخ</th>
+                                    <th class="px-4 py-2 text-right">الوقت</th>
+                                    <th class="px-4 py-2 text-right">النوع</th>
+                                </tr>
+                            </thead>
+                            <tbody id="attendance-records" class="divide-y divide-gray-200 dark:divide-gray-700">
+                                <!-- سيتم إضافة السجلات هنا ديناميكيًا -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="no-records" class="text-center py-4 text-gray-500">
+                        لا توجد سجلات حضور حتى الآن
+                    </div>
+                </div>
+            </div>
+        </main>
+        
+        <footer class="bg-gray-100 dark:bg-gray-800 p-4 text-center text-sm">
+            <p>© 2023 - نظام تسجيل الحضور والانصراف</p>
+        </footer>
+    </div>
+    
+    <script type="module">
+        // تكوين Firebase
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js';
+        import { getFirestore, collection, addDoc, query, where, orderBy, getDocs, limit } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js';
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js';
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBGmPBvFrap25W2d-BueVCjHmWJh5vAaiU",
+            authDomain: "reg-time.firebaseapp.com",
+            projectId: "reg-time",
+            storageBucket: "reg-time.firebasestorage.app",
+            messagingSenderId: "388216258796",
+            appId: "1:388216258796:web:61ebca12e7c6c9e05765c9",
+            measurementId: "G-4Q8T869WC1"
+        };
+
+        // تهيئة Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        // متغيرات عامة
+        let currentUser = null;
+        let userLocation = null;
+        let html5QrCode = null;
+        
+        // للتبديل بين الوضع المظلم والمضيء
+        function setupDarkMode() {
+            if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                document.body.classList.remove('light');
+                document.body.classList.add('dark');
+            }
+            
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+                if (event.matches) {
+                    document.body.classList.remove('light');
+                    document.body.classList.add('dark');
+                } else {
+                    document.body.classList.remove('dark');
+                    document.body.classList.add('light');
+                }
+            });
+        }
+        
+        // عرض رسالة للمستخدم
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toast-message');
+            
+            toast.className = 'toast';
+            toast.classList.add(`toast-${type}`);
+            toastMessage.textContent = message;
+            
+            setTimeout(() => {
+                toast.classList.add('show');
+            }, 100);
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+        
+        // التحقق من الجلسة الحالية
+        function checkSession() {
+            const userData = localStorage.getItem('attendanceUser');
+            if (userData) {
+                currentUser = JSON.parse(userData);
+                showAppSection();
+                loadAttendanceRecords();
+            }
+        }
+        
+        // إظهار قسم التطبيق وإخفاء قسم تسجيل الدخول
+        function showAppSection() {
+            document.getElementById('login-section').classList.add('hidden');
+            document.getElementById('app-section').classList.remove('hidden');
+            document.getElementById('app-section').classList.add('flex');
+            document.getElementById('user-name').textContent = currentUser.name;
+        }
+        
+        // تسجيل الدخول
+        async function handleLogin(e) {
+            e.preventDefault();
+            
+            const id = document.getElementById('employee-id').value;
+            const name = document.getElementById('employee-name').value;
+            const password = document.getElementById('password').value;
+            
+            if (!id || !name || !password) {
+                showToast('يرجى إدخال جميع البيانات المطلوبة', 'error');
+                return;
+            }
+            
+            try {
+                // استخدام بريد إلكتروني افتراضي (رقم الموظف + مجال) للتسجيل في Firebase Auth
+                const email = `${id}@attendance.app`;
+                
+                try {
+                    // محاولة تسجيل الدخول
+                    await signInWithEmailAndPassword(auth, email, password);
+                } catch (error) {
+                    if (error.code === 'auth/user-not-found') {
+                        // إنشاء حساب جديد إذا لم يكن موجودًا
+                        await createUserWithEmailAndPassword(auth, email, password);
+                    } else {
+                        throw error;
+                    }
+                }
+                
+                // تخزين بيانات المستخدم في التخزين المحلي
+                currentUser = { id, name, email };
+                localStorage.setItem('attendanceUser', JSON.stringify(currentUser));
+                
+                showToast('تم تسجيل الدخول بنجاح');
+                showAppSection();
+                loadAttendanceRecords();
+            } catch (error) {
+                console.error('خطأ في تسجيل الدخول:', error);
+                showToast('خطأ في تسجيل الدخول. تأكد من البيانات المدخلة.', 'error');
+            }
+        }
+        
+        // تسجيل الخروج
+        function handleLogout() {
+            localStorage.removeItem('attendanceUser');
+            currentUser = null;
+            document.getElementById('app-section').classList.add('hidden');
+            document.getElementById('app-section').classList.remove('flex');
+            document.getElementById('login-section').classList.remove('hidden');
+            
+            // إعادة تعيين النموذج
+            document.getElementById('login-form').reset();
+            
+            if (html5QrCode && html5QrCode.isScanning) {
+                html5QrCode.stop();
+            }
+        }
+        
+        // تحديد الموقع
+        function getLocation() {
+            return new Promise((resolve, reject) => {
+                if (!navigator.geolocation) {
+                    reject(new Error('خدمة تحديد الموقع غير متوفرة في متصفحك'));
+                    return;
+                }
+                
+                const locationStatus = document.getElementById('location-status');
+                locationStatus.classList.remove('hidden');
+                
+                navigator.geolocation.getCurrentPosition(
+                    position => {
+                        userLocation = {
+                            latitude: position.coords.latitude,
+                            longitude: position.coords.longitude
+                        };
+                        locationStatus.classList.add('hidden');
+                        resolve(userLocation);
+                    },
+                    error => {
+                        locationStatus.classList.add('hidden');
+                        let errorMessage = 'خطأ في تحديد الموقع';
+                        
+                        switch (error.code) {
+                            case error.PERMISSION_DENIED:
+                                errorMessage = 'تم رفض الإذن لتحديد الموقع';
+                                break;
+                            case error.POSITION_UNAVAILABLE:
+                                errorMessage = 'معلومات الموقع غير متوفرة';
+                                break;
+                            case error.TIMEOUT:
+                                errorMessage = 'انتهت مهلة طلب الموقع';
+                                break;
+                        }
+                        
+                        reject(new Error(errorMessage));
+                    }
+                );
+            });
+        }
+        
+        // تحديد نوع التسجيل (حضور/انصراف) بناءً على الوقت
+        function determineRecordType() {
+            const now = new Date();
+            const hours = now.getHours();
+            
+            if (hours >= 7 && hours < 10) {
+                return 'حضور';
+            } else if (hours >= 14 && hours < 18) {
+                return 'انصراف';
+            } else {
+                return 'خارج وقت التسجيل';
+            }
+        }
+        
+        // معالجة مسح رمز QR
+        async function handleQRScan(decodedText) {
+            if (!currentUser) {
+                showToast('يرجى تسجيل الدخول أولاً', 'error');
+                return;
+            }
+            
+            // إيقاف المسح
+            if (html5QrCode && html5QrCode.isScanning) {
+                await html5QrCode.stop();
+                document.getElementById('qr-reader').classList.add('hidden');
+                document.getElementById('start-scan-btn').classList.remove('hidden');
+            }
+            
+            try {
+                // الحصول على الموقع
+                await getLocation();
+                
+                // تحديد نوع التسجيل
+                const recordType = determineRecordType();
+                
+                if (recordType === 'خارج وقت التسجيل') {
+                    showToast('الوقت الحالي خارج نطاق تسجيل الحضور أو الانصراف', 'error');
+                    return;
+                }
+                
+                // تحضير البيانات للتخزين
+                const timestamp = new Date();
+                const attendanceData = {
+                    employeeId: currentUser.id,
+                    employeeName: currentUser.name,
+                    timestamp: timestamp,
+                    type: recordType,
+                    location: userLocation,
+                    qrCode: decodedText
+                };
+                
+                // تخزين البيانات في Firebase
+                await addDoc(collection(db, 'attendance'), attendanceData);
+                
+                // تحديث واجهة المستخدم
+                showToast(`تم تسجيل ${recordType} بنجاح`);
+                updateLastRecord(timestamp, recordType);
+                loadAttendanceRecords();
+                
+            } catch (error) {
+                console.error('خطأ في تسجيل الحضور/الانصراف:', error);
+                showToast(`خطأ: ${error.message}`, 'error');
+            }
+        }
+        
+        // تحديث آخر تسجيل في واجهة المستخدم
+        function updateLastRecord(timestamp, type) {
+            const lastRecord = document.getElementById('last-record');
+            const lastRecordTime = document.getElementById('last-record-time');
+            const lastRecordType = document.getElementById('last-record-type');
+            
+            const dateTimeFormat = new Intl.DateTimeFormat('ar-EG', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            
+            lastRecordTime.textContent = `الوقت: ${dateTimeFormat.format(timestamp)}`;
+            lastRecordType.textContent = `النوع: ${type}`;
+            lastRecord.classList.remove('hidden');
+        }
+        
+        // تحميل سجلات الحضور/الانصراف
+        async function loadAttendanceRecords() {
+            if (!currentUser) return;
+            
+            try {
+                const attendanceQuery = query(
+                    collection(db, 'attendance'),
+                    where('employeeId', '==', currentUser.id),
+                    orderBy('timestamp', 'desc'),
+                    limit(10)
+                );
+                
+                const querySnapshot = await getDocs(attendanceQuery);
+                const records = document.getElementById('attendance-records');
+                const noRecords = document.getElementById('no-records');
+                
+                records.innerHTML = '';
+                
+                if (querySnapshot.empty) {
+                    noRecords.classList.remove('hidden');
+                    return;
+                }
+                
+                noRecords.classList.add('hidden');
+                
+                const dateFormat = new Intl.DateTimeFormat('ar-EG', {
+                    year: 'numeric',
+                    month: 'numeric',
+                    day: 'numeric'
+                });
+                
+                const timeFormat = new Intl.DateTimeFormat('ar-EG', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                
+                querySnapshot.forEach(doc => {
+                    const data = doc.data();
+                    const timestamp = data.timestamp.toDate();
+                    
+                    const row = document.createElement('tr');
+                    
+                    const dateCell = document.createElement('td');
+                    dateCell.className = 'px-4 py-2';
+                    dateCell.textContent = dateFormat.format(timestamp);
+                    
+                    const timeCell = document.createElement('td');
+                    timeCell.className = 'px-4 py-2';
+                    timeCell.textContent = timeFormat.format(timestamp);
+                    
+                    const typeCell = document.createElement('td');
+                    typeCell.className = 'px-4 py-2';
+                    
+                    const typeSpan = document.createElement('span');
+                    typeSpan.textContent = data.type;
+                    
+                    if (data.type === 'حضور') {
+                        typeSpan.className = 'bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs';
+                    } else {
+                        typeSpan.className = 'bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs';
+                    }
+                    
+                    typeCell.appendChild(typeSpan);
+                    
+                    row.appendChild(dateCell);
+                    row.appendChild(timeCell);
+                    row.appendChild(typeCell);
+                    
+                    records.appendChild(row);
+                });
+                
+                // إذا كان هناك سجلات، قم بتحديث آخر تسجيل
+                if (!querySnapshot.empty) {
+                    const lastRecord = querySnapshot.docs[0].data();
+                    updateLastRecord(lastRecord.timestamp.toDate(), lastRecord.type);
+                }
+                
+            } catch (error) {
+                console.error('خطأ في تحميل سجلات الحضور:', error);
+                showToast('تعذر تحميل سجلات الحضور', 'error');
+            }
+        }
+        
+        // بدء مسح رمز QR
+        function startQRScan() {
+            const qrReader = document.getElementById('qr-reader');
+            const startScanBtn = document.getElementById('start-scan-btn');
+            
+            startScanBtn.classList.add('hidden');
+            qrReader.classList.remove('hidden');
+            
+            if (!html5QrCode) {
+                html5QrCode = new Html5Qrcode("qr-reader");
+            }
+            
+            const qrConfig = { fps: 10, qrbox: { width: 250, height: 250 } };
+            
+            html5QrCode.start(
+                { facingMode: "environment" },
+                qrConfig,
+                handleQRScan,
+                (errorMessage) => {
+                    // تجاهل أخطاء المسح المستمر
+                    // console.log(errorMessage);
+                }
+            ).catch(err => {
+                console.error('خطأ في بدء المسح:', err);
+                showToast('تعذر بدء مسح رمز QR', 'error');
+                startScanBtn.classList.remove('hidden');
+                qrReader.classList.add('hidden');
+            });
+        }
+        
+        // تهيئة التطبيق
+        function initApp() {
+            // إعداد الوضع المظلم
+            setupDarkMode();
+            
+            // التحقق من وجود جلسة
+            checkSession();
+            
+            // إضافة مستمعي الأحداث
+            document.getElementById('login-form').addEventListener('submit', handleLogin);
+            document.getElementById('logout-btn').addEventListener('click', handleLogout);
+            document.getElementById('start-scan-btn').addEventListener('click', startQRScan);
+        }
+        
+        // بدء التطبيق عند تحميل الصفحة
+        document.addEventListener('DOMContentLoaded', initApp);
+    </script>
+</body>
+</html>
