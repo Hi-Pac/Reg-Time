@@ -323,9 +323,9 @@
             const now = new Date();
             const hours = now.getHours();
             
-            if (hours >= 7 && hours < 11) {
+            if (hours >= 0 && hours < 11) {
                 return "حضور";
-            } else if (hours >= 14 && hours < 18) {
+            } else if (hours >= 14 && hours < 23) {
                 return "انصراف";
             } else {
                 return null; // خارج أوقات التسجيل
