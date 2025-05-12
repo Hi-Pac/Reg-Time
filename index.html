@@ -9,6 +9,7 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@3/dist/fp.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap');
         
@@ -170,13 +171,15 @@
         
         // تهيئة Firebase
         firebase.initializeApp(firebaseConfig);
+
+```html
         const db = firebase.firestore();
         
         // موقع الشركة
         const companyLocation = {
-        latitude: 30.8101407, 
-        longitude: 30.9977904,
-        radius: 25 // نصف قطر دائرة الشركة بالمتر
+            latitude: 30.8088445, 
+            longitude: 31.0033777,
+            radius: 25 // نصف قطر دائرة الشركة بالمتر
         };
         
         // العناصر في الصفحة
@@ -215,15 +218,17 @@
             }
         });
         
-        // توليد معرف الجهاز
-        function generateDeviceId() {
-            let deviceId = localStorage.getItem('device_id');
-            if (!deviceId) {
-                // إنشاء هوية جديدة إذا لم تكن موجودة
-                deviceId = 'device_' + Date.now() + '_' + Math.random().toString(36).substring(2, 15);
-                localStorage.setItem('device_id', deviceId);
-            }
-            return deviceId;
+        // توليد معرف الجهاز باستخدام FingerprintJS
+        async function generateDeviceId() {
+            const storedDeviceId = localStorage.getItem('device_id');
+            if (storedDeviceId) return storedDeviceId;
+
+            const fp = await FingerprintJS.load();
+            const result = await fp.get();
+            const uniqueId = result.visitorId;
+
+            localStorage.setItem('device_id', uniqueId);
+            return uniqueId;
         }
         
         // التحقق من المسافة بين نقطتين جغرافيتين
@@ -277,7 +282,7 @@
         
         // التحقق من تسجيل الجهاز
         async function checkDeviceRegistration() {
-            const deviceId = generateDeviceId();
+            const deviceId = await generateDeviceId();
             
             try {
                 const docRef = db.collection('employees').doc(deviceId);
@@ -299,7 +304,7 @@
         
         // تسجيل موظف جديد
         async function registerNewEmployee(name) {
-            const deviceId = generateDeviceId();
+            const deviceId = await generateDeviceId();
             
             try {
                 await db.collection('employees').doc(deviceId).set({
@@ -323,9 +328,9 @@
             const now = new Date();
             const hours = now.getHours();
             
-            if (hours >= 0 && hours < 11) {
+            if (hours >= 0 && hours < 14) {
                 return "حضور";
-            } else if (hours >= 14 && hours < 23) {
+            } else if (hours >= 14 && hours < 24) {
                 return "انصراف";
             } else {
                 return null; // خارج أوقات التسجيل
