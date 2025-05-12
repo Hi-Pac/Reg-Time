@@ -11,7 +11,6 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@3/dist/fp.min.js"></script>
     <style>
-        /* تنسيقات CSS */
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap');
 
         :root {
@@ -58,8 +57,19 @@
     <div class="max-w-md mx-auto mt-12 p-6 bg-white rounded-lg shadow-md text-center">
         <h1 class="text-2xl font-bold mb-4">نظام تسجيل الحضور والانصراف</h1>
         <p class="text-gray-600 mb-6">تأكد من أنك داخل موقع الشركة لتسجيل الحضور أو الانصراف</p>
+
+        <!-- زر تسجيل الحضور/الانصراف -->
         <button id="checkButton" class="btn-primary">تسجيل الحضور / الانصراف</button>
+
+        <!-- مؤشر التحميل -->
         <div id="loadingIndicator" class="loading-spinner hidden mt-4"></div>
+
+        <!-- نموذج إدخال اسم الموظف -->
+        <div id="nameForm" class="hidden mt-6">
+            <label for="employeeName" class="block text-gray-700 text-sm font-medium mb-2">اسمك الثنائي</label>
+            <input type="text" id="employeeName" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent" placeholder="أدخل اسمك الثنائي" />
+            <button id="submitName" class="btn-primary mt-4 w-full">إرسال</button>
+        </div>
     </div>
 
     <script>
@@ -82,7 +92,16 @@
         const companyLocation = {
             latitude: 30.8087063, 
             longitude: 31.0030066,
-            radius: 50 // نصف قطر الموقع بالمتر
+            radius: 25 // نصف قطر الموقع بالمتر
+        };
+
+        // العناصر في الصفحة
+        const elements = {
+            checkButton: document.getElementById('checkButton'),
+            loadingIndicator: document.getElementById('loadingIndicator'),
+            nameForm: document.getElementById('nameForm'),
+            employeeName: document.getElementById('employeeName'),
+            submitName: document.getElementById('submitName'),
         };
 
         // توليد معرف الجهاز باستخدام FingerprintJS
@@ -104,22 +123,6 @@
             }
         }
 
-        // حساب المسافة بين نقطتين جغرافيتين
-        function calculateDistance(lat1, lon1, lat2, lon2) {
-            const R = 6371e3; // نصف قطر الأرض بالأمتار
-            const φ1 = lat1 * Math.PI / 180;
-            const φ2 = lat2 * Math.PI / 180;
-            const Δφ = (lat2 - lat1) * Math.PI / 180;
-            const Δλ = (lon2 - lon1) * Math.PI / 180;
-
-            const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-                      Math.cos(φ1) * Math.cos(φ2) *
-                      Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-            return R * c; // المسافة بالأمتار
-        }
-
         // عرض رسالة خطأ
         function showError(message) {
             Swal.fire({
@@ -131,7 +134,65 @@
             });
         }
 
-        // تسجيل الحضور / الانصراف في Firebase
+        // تسجيل الموظف الجديد
+        async function registerNewEmployee(deviceId, name) {
+            try {
+                await db.collection('employees').doc(deviceId).set({
+                    name: name,
+                    registrationDate: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                Swal.fire({
+                    title: 'تم التسجيل بنجاح',
+                    text: 'تم تسجيل بياناتك بنجاح. يمكنك الآن تسجيل الحضور أو الانصراف.',
+                    icon: 'success',
+                    confirmButtonText: 'موافق',
+                    confirmButtonColor: '#5D5CDE'
+                });
+
+                elements.nameForm.classList.add('hidden');
+                elements.checkButton.classList.remove('hidden');
+            } catch (error) {
+                console.error("خطأ أثناء تسجيل الموظف:", error);
+                showError("حدث خطأ أثناء تسجيل بياناتك. يرجى المحاولة مرة أخرى.");
+            }
+        }
+
+        // التحقق من تسجيل الموظف
+        async function checkEmployeeRegistration() {
+            const deviceId = await generateDeviceId();
+
+            try {
+                const doc = await db.collection('employees').doc(deviceId).get();
+
+                if (doc.exists) {
+                    // الموظف مسجل بالفعل
+                    return true;
+                } else {
+                    // الموظف جديد، عرض نموذج إدخال الاسم
+                    elements.checkButton.classList.add('hidden');
+                    elements.nameForm.classList.remove('hidden');
+
+                    // التعامل مع زر إرسال الاسم
+                    elements.submitName.addEventListener('click', () => {
+                        const name = elements.employeeName.value.trim();
+                        if (name.length < 3 || !name.includes(' ')) {
+                            showError("يرجى إدخال اسمك الثنائي بشكل صحيح.");
+                            return;
+                        }
+                        registerNewEmployee(deviceId, name);
+                    });
+
+                    return false;
+                }
+            } catch (error) {
+                console.error("خطأ أثناء التحقق من التسجيل:", error);
+                showError("حدث خطأ أثناء التحقق من بيانات الموظف. يرجى المحاولة مرة أخرى.");
+                return false;
+            }
+        }
+
+        // تسجيل الحضور / الانصراف
         async function processAttendance(deviceId) {
             const now = new Date();
             const hours = now.getHours();
@@ -153,63 +214,27 @@
                     confirmButtonText: 'موافق',
                     confirmButtonColor: '#5D5CDE'
                 });
+
+                elements.loadingIndicator.classList.add('hidden');
+                elements.checkButton.classList.remove('hidden');
             } catch (error) {
                 console.error("خطأ أثناء تسجيل الحضور:", error);
                 showError("حدث خطأ أثناء تسجيل الحضور. يرجى المحاولة مرة أخرى.");
             }
         }
 
-        // التحقق من الموقع الجغرافي
-        async function checkLocation() {
-            if (!navigator.geolocation) {
-                showError("متصفحك لا يدعم خدمة تحديد الموقع.");
-                return;
-            }
+        // التعامل مع زر تسجيل الحضور / الانصراف
+        elements.checkButton.addEventListener('click', async () => {
+            elements.checkButton.classList.add('hidden');
+            elements.loadingIndicator.classList.remove('hidden');
 
-            navigator.geolocation.getCurrentPosition(async (position) => {
-                const { latitude, longitude } = position.coords;
-                const distance = calculateDistance(
-                    latitude, longitude,
-                    companyLocation.latitude, companyLocation.longitude
-                );
-
-                if (distance > companyLocation.radius) {
-                    showError("أنت لست داخل موقع الشركة. يرجى المحاولة مرة أخرى عند الوصول.");
-                    document.getElementById('loadingIndicator').classList.add('hidden');
-                    document.getElementById('checkButton').classList.remove('hidden');
-                    return;
-                }
-
+            const isRegistered = await checkEmployeeRegistration();
+            if (isRegistered) {
                 const deviceId = await generateDeviceId();
                 await processAttendance(deviceId);
+            }
 
-                document.getElementById('loadingIndicator').classList.add('hidden');
-                document.getElementById('checkButton').classList.remove('hidden');
-            }, (error) => {
-                console.error("خطأ في تحديد الموقع:", error);
-                let message = "حدث خطأ أثناء تحديد الموقع.";
-                if (error.code === error.PERMISSION_DENIED) {
-                    message = "تم رفض الوصول إلى خدمة تحديد الموقع.";
-                } else if (error.code === error.POSITION_UNAVAILABLE) {
-                    message = "معلومات الموقع غير متاحة.";
-                } else if (error.code === error.TIMEOUT) {
-                    message = "انتهت مهلة طلب تحديد الموقع.";
-                }
-                showError(message);
-                document.getElementById('loadingIndicator').classList.add('hidden');
-                document.getElementById('checkButton').classList.remove('hidden');
-            });
-        }
-
-        // التعامل مع زر تسجيل الحضور / الانصراف
-        document.getElementById('checkButton').addEventListener('click', () => {
-            const button = document.getElementById('checkButton');
-            const loader = document.getElementById('loadingIndicator');
-
-            button.classList.add('hidden');
-            loader.classList.remove('hidden');
-
-            checkLocation();
+            elements.loadingIndicator.classList.add('hidden');
         });
     </script>
 </body>
