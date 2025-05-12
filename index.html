@@ -11,20 +11,55 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@3/dist/fp.min.js"></script>
     <style>
-        /* نفس التنسيقات السابقة */
+        /* تنسيقات CSS */
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap');
+
+        :root {
+            --primary-color: #5D5CDE;
+        }
+
+        body {
+            font-family: 'Tajawal', sans-serif;
+            background-color: #f3f4f6;
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            background-color: #3e3dd3;
+        }
+
+        .loading-spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-right-color: var(--primary-color);
+            border-radius: 50%;
+            width: 36px;
+            height: 36px;
+            animation: spin 1s linear infinite;
+            margin: auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
-<body class="min-h-screen bg-gray-100 py-6 px-4">
-    <div class="max-w-md mx-auto">
-        <div class="card bg-white p-8 rounded-xl shadow-lg mb-6 text-center fade-in">
-            <h1 class="text-2xl font-bold text-gray-800 mb-2">نظام تسجيل الحضور والانصراف</h1>
-            <button id="checkButton" class="w-full btn-primary text-white py-3 px-6 rounded-md font-medium text-lg pulse-animation">
-                تسجيل الحضور / الانصراف
-            </button>
-            <div id="loadingIndicator" class="hidden mt-4 flex justify-center">
-                <div class="loading-spinner"></div>
-            </div>
-        </div>
+<body>
+    <div class="max-w-md mx-auto mt-12 p-6 bg-white rounded-lg shadow-md text-center">
+        <h1 class="text-2xl font-bold mb-4">نظام تسجيل الحضور والانصراف</h1>
+        <p class="text-gray-600 mb-6">تأكد من أنك داخل موقع الشركة لتسجيل الحضور أو الانصراف</p>
+        <button id="checkButton" class="btn-primary">تسجيل الحضور / الانصراف</button>
+        <div id="loadingIndicator" class="loading-spinner hidden mt-4"></div>
     </div>
 
     <script>
@@ -38,10 +73,17 @@
             appId: "1:388216258796:web:61ebca12e7c6c9e05765c9",
             measurementId: "G-4Q8T869WC1"
         };
-        
+
         // تهيئة Firebase
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
+
+        // بيانات موقع الشركة
+        const companyLocation = {
+            latitude: 30.8101407,
+            longitude: 30.9977904,
+            radius: 25 // نصف قطر الموقع بالمتر
+        };
 
         // توليد معرف الجهاز باستخدام FingerprintJS
         async function generateDeviceId() {
@@ -62,6 +104,22 @@
             }
         }
 
+        // حساب المسافة بين نقطتين جغرافيتين
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371e3; // نصف قطر الأرض بالأمتار
+            const φ1 = lat1 * Math.PI / 180;
+            const φ2 = lat2 * Math.PI / 180;
+            const Δφ = (lat2 - lat1) * Math.PI / 180;
+            const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+            const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+                      Math.cos(φ1) * Math.cos(φ2) *
+                      Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+            return R * c; // المسافة بالأمتار
+        }
+
         // عرض رسالة خطأ
         function showError(message) {
             Swal.fire({
@@ -73,62 +131,85 @@
             });
         }
 
+        // تسجيل الحضور / الانصراف في Firebase
+        async function processAttendance(deviceId) {
+            const now = new Date();
+            const hours = now.getHours();
+            const type = hours < 14 ? "حضور" : "انصراف";
+
+            try {
+                await db.collection('attendance').add({
+                    deviceId,
+                    type,
+                    time: now.toLocaleTimeString('ar-EG'),
+                    date: now.toLocaleDateString('ar-EG'),
+                    timestamp: firebase.firestore.Timestamp.fromDate(now)
+                });
+
+                Swal.fire({
+                    title: 'تم بنجاح',
+                    text: `تم تسجيل ${type} بنجاح!`,
+                    icon: 'success',
+                    confirmButtonText: 'موافق',
+                    confirmButtonColor: '#5D5CDE'
+                });
+            } catch (error) {
+                console.error("خطأ أثناء تسجيل الحضور:", error);
+                showError("حدث خطأ أثناء تسجيل الحضور. يرجى المحاولة مرة أخرى.");
+            }
+        }
+
+        // التحقق من الموقع الجغرافي
+        async function checkLocation() {
+            if (!navigator.geolocation) {
+                showError("متصفحك لا يدعم خدمة تحديد الموقع.");
+                return;
+            }
+
+            navigator.geolocation.getCurrentPosition(async (position) => {
+                const { latitude, longitude } = position.coords;
+                const distance = calculateDistance(
+                    latitude, longitude,
+                    companyLocation.latitude, companyLocation.longitude
+                );
+
+                if (distance > companyLocation.radius) {
+                    showError("أنت لست داخل موقع الشركة. يرجى المحاولة مرة أخرى عند الوصول.");
+                    document.getElementById('loadingIndicator').classList.add('hidden');
+                    document.getElementById('checkButton').classList.remove('hidden');
+                    return;
+                }
+
+                const deviceId = await generateDeviceId();
+                await processAttendance(deviceId);
+
+                document.getElementById('loadingIndicator').classList.add('hidden');
+                document.getElementById('checkButton').classList.remove('hidden');
+            }, (error) => {
+                console.error("خطأ في تحديد الموقع:", error);
+                let message = "حدث خطأ أثناء تحديد الموقع.";
+                if (error.code === error.PERMISSION_DENIED) {
+                    message = "تم رفض الوصول إلى خدمة تحديد الموقع.";
+                } else if (error.code === error.POSITION_UNAVAILABLE) {
+                    message = "معلومات الموقع غير متاحة.";
+                } else if (error.code === error.TIMEOUT) {
+                    message = "انتهت مهلة طلب تحديد الموقع.";
+                }
+                showError(message);
+                document.getElementById('loadingIndicator').classList.add('hidden');
+                document.getElementById('checkButton').classList.remove('hidden');
+            });
+        }
+
         // التعامل مع زر تسجيل الحضور / الانصراف
-        document.getElementById('checkButton').addEventListener('click', async () => {
+        document.getElementById('checkButton').addEventListener('click', () => {
             const button = document.getElementById('checkButton');
             const loader = document.getElementById('loadingIndicator');
 
-            // إظهار المؤشر
             button.classList.add('hidden');
             loader.classList.remove('hidden');
 
-            try {
-                const deviceId = await generateDeviceId();
-                console.log("معرف الجهاز:", deviceId);
-
-                // التحقق من الموقع الجغرافي
-                if (!navigator.geolocation) {
-                    throw new Error("المتصفح لا يدعم خدمة تحديد الموقع.");
-                }
-
-                navigator.geolocation.getCurrentPosition(
-                    async (position) => {
-                        console.log("تم تحديد الموقع بنجاح:", position);
-                        // هنا يمكن إضافة الكود الخاص بالتحقق من الموقع
-                        setTimeout(() => {
-                            loader.classList.add('hidden');
-                            button.classList.remove('hidden');
-                        }, 2000);
-                    },
-                    (error) => {
-                        console.error("خطأ في تحديد الموقع:", error);
-                        let errorMessage = '';
-                        switch (error.code) {
-                            case error.PERMISSION_DENIED:
-                                errorMessage = 'تم رفض الوصول إلى خدمة تحديد الموقع.';
-                                break;
-                            case error.POSITION_UNAVAILABLE:
-                                errorMessage = 'معلومات الموقع غير متاحة.';
-                                break;
-                            case error.TIMEOUT:
-                                errorMessage = 'انتهت مهلة طلب تحديد الموقع.';
-                                break;
-                            default:
-                                errorMessage = 'حدث خطأ غير معروف في تحديد الموقع.';
-                                break;
-                        }
-                        showError(errorMessage);
-                        loader.classList.add('hidden');
-                        button.classList.remove('hidden');
-                    },
-                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-                );
-            } catch (error) {
-                console.error("خطأ أثناء العملية:", error);
-                showError("حدث خطأ أثناء تنفيذ العملية. يرجى المحاولة مرة أخرى.");
-                loader.classList.add('hidden');
-                button.classList.remove('hidden');
-            }
+            checkLocation();
         });
     </script>
 </body>
